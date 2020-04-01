@@ -1,8 +1,8 @@
 /**
  * Program Title: Buffer Manager
  * File Purpose:
- * Authors & ID: AKOVI BERLOS MENSAH
- *               Yuanbo Zhang
+ * Authors & ID: AKOVI BERLOS MENSAH (9080623458)
+ *               Yuanbo Zhang (9080344840)
  *               Quming Wang(9079581147);
  * 
  */
