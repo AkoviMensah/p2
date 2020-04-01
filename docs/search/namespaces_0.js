@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['badgerdb',['badgerdb',['../namespacebadgerdb.html',1,'']]]
+  ['badgerdb_146',['badgerdb',['../namespacebadgerdb.html',1,'']]]
 ];

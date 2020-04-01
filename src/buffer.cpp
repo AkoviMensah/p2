@@ -70,10 +70,10 @@ void BufMgr::advanceClock()
 }
 
 /**
-* Allocate a free frame. If necessary, writing a dirty page back to disk
+* Allocates a free frame. If necessary, writing a dirty page back to disk
 *
-* @param frame   Frame reference, frame ID of allocated frame returned via this variable
-* @throws BufferExceededException If no such buffer is found which can be allocated
+* @param frame   Frame ID of allocated frame returned through this parameter
+* @throws BufferExceededException If all buffer frames are pinned
 */
 void BufMgr::allocBuf(FrameId &frame)
 {
@@ -126,12 +126,12 @@ void BufMgr::allocBuf(FrameId &frame)
 
 /**
 * Reads the given page from the file into a frame and returns the pointer to page.
-* If the requested page is already present in the buffer pool pointer to that frame is returned
-* otherwise a new frame is allocated from the buffer pool for reading the page.
+* If the requested page is already present in the buffer pool, simply returns the pointer
+* Otherwise a new frame is allocated from the buffer pool for reading the page.
 *
-* @param file    File object
+* @param file    The file to read
 * @param PageNo  Page number in the file to be read
-* @param page  	 Reference to page pointer. Used to fetch the Page object in which requested page from file is read in.
+* @param page  	 A pointer through which the frame containing the requested page is returned
 */
 void BufMgr::readPage(File *file, const PageId pageNo, Page *&page)
 {
@@ -158,10 +158,10 @@ void BufMgr::readPage(File *file, const PageId pageNo, Page *&page)
 }
 
 /**
-* Unpin a page from memory since it is no longer required for it to remain in memory.
+* Unpin a page from memory so it is no longer required to remain in memory.
 *
-* @param file   	File object
-* @param PageNo     Page number
+* @param file   	File to lookup
+* @param PageNo     Page number in the file
 * @param dirty		True if the page to be unpinned needs to be marked dirty	
 * @throws  PageNotPinnedException If the page is not already pinned
 */
@@ -191,9 +191,9 @@ void BufMgr::unPinPage(File *file, const PageId pageNo, const bool dirty)
 * Allocates a new, empty page in the file and returns the Page object.
 * The newly allocated page is also assigned a frame in the buffer pool.
 *
-* @param file    File object
-* @param PageNo  Page number. The number assigned to the page in the file is returned via this reference.
-* @param page    Reference to page pointer. The newly allocated in-memory Page object is returned via this reference.
+* @param file    The file to be allocated a page
+* @param PageNo  The newly allocated page number in the file is returned through this reference.
+* @param page    Reference to page pointer. The newly allocated in-memory Page object is returned through this reference.
 */
 void BufMgr::allocPage(File *file, PageId &pageNo, Page *&page)
 {
@@ -209,11 +209,12 @@ void BufMgr::allocPage(File *file, PageId &pageNo, Page *&page)
 }
 
 /**
-* Delete page from file and also from buffer pool if present.
-* Since the page is entirely deleted from file, its unnecessary to see if the page is dirty.
+* This method deletes a particular page from file
+* if the page to be deleted is allocated a frame in the buffer pool, that frame is freed and correspondingly entry from hash table is also removed
+* Since the page is entirely deleted from file, we do not need to check if the page is dirty.
 *
-* @param file    File object
-* @param PageNo  Page number
+* @param file    The file in which a page to be disposed
+* @param PageNo  Page number of that file
 */
 void BufMgr::disposePage(File *file, const PageId pageNo)
 {
@@ -234,7 +235,6 @@ void BufMgr::disposePage(File *file, const PageId pageNo)
 /**
 * Writes out all dirty pages of the file to disk.
 * All the frames assigned to the file need to be unpinned from buffer pool before this function can be successfully called.
-* Otherwise Error returned.
 *
 * @param file   File object
 * @throws  PagePinnedException If any page of the file is pinned in the buffer pool 
