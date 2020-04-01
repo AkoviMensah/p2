@@ -1,8 +1,8 @@
 /**
  * Program Title: Buffer Manager
- * File Purpose:
+ * File Purpose: Heart of the buffer manager, provides a interface for user
  * Authors & ID: AKOVI BERLOS MENSAH
- *               Yuanbo Zhang
+ *               Yuanbo Zhang(9080344840)
  *               Quming Wang(9079581147);
  * 
  */
@@ -19,6 +19,11 @@
 namespace badgerdb
 {
 
+/**
+* Class constructor.
+* Allocates an array for the buffer pool with bufs page frames and a corresponding
+* BufDesc table
+*/
 BufMgr::BufMgr(std::uint32_t bufs)
 	: numBufs(bufs)
 {
@@ -38,9 +43,22 @@ BufMgr::BufMgr(std::uint32_t bufs)
 	clockHand = bufs - 1;
 }
 
+/**
+* Flushes out all dirty pages and deallocates the buffer pool and the BufDesc table.
+*/
 BufMgr::~BufMgr()
 {
+    // Flushes out all dirty pages
+    for(int i = 0; i < numBufs; i++){
+        BufDesc* frame = &bufDescTable[i];
+        if(frame->dirty){
+          // flush to disk
+          frame->file->writePage(*(bufPool + frame->frameNo));
+        }
+    }
+    // Deallocate
 	delete[] bufPool;
+    delete[] bufDescTable;
 }
 
 /**
@@ -48,13 +66,11 @@ BufMgr::~BufMgr()
  */
 void BufMgr::advanceClock()
 {
-	//increments the clockhand by 1 and make sure it is between 0 and numBufs -1
-	temp = (clockHand + 1);
-	clockHand = temp % numBufs; //clockHand should not be greater than numBufs-1
+	clockHand = (clockHand + 1) % numBufs;
 }
 
 /**
-* Allocate a free frame.  
+* Allocate a free frame. If necessary, writing a dirty page back to disk
 *
 * @param frame   Frame reference, frame ID of allocated frame returned via this variable
 * @throws BufferExceededException If no such buffer is found which can be allocated
@@ -87,8 +103,9 @@ void BufMgr::allocBuf(FrameId &frame)
 	} else {
 	  if(frameInfo->dirty){
 	    // flush page to disk
-	    Status s = frameInfo->file->writePage(frameInfo->pageNo, bufPool + frameInfo->frameNo);
-	    CHKSTAT(s); // UNIXERR
+          // frameInfo->file->writePage(frameInfo->pageNo, *(bufPool + frameInfo->frameNo));
+          // private?
+           frameInfo->file->writePage(*(bufPool + frameInfo->frameNo));
 	  }
 	  break;
 	}
@@ -112,31 +129,31 @@ void BufMgr::allocBuf(FrameId &frame)
 * If the requested page is already present in the buffer pool pointer to that frame is returned
 * otherwise a new frame is allocated from the buffer pool for reading the page.
 *
-* @param file   	File object
+* @param file    File object
 * @param PageNo  Page number in the file to be read
-* @param page  	Reference to page pointer. Used to fetch the Page object in which requested page from file is read in.
+* @param page  	 Reference to page pointer. Used to fetch the Page object in which requested page from file is read in.
 */
 void BufMgr::readPage(File *file, const PageId pageNo, Page *&page)
 {
-	FrameId frame_number;
+	FrameId frameNo;
 	try
 	{
-		hashTable->lookup(file, pageNo, frame_number);
-		page = &bufPool[frame_number];
+		hashTable->lookup(file, pageNo, frameNo);
+		page = &bufPool[frameNo];
 		//Increment pin count and set reference bit to 1
-		bufDescTable[frame_number].pinCnt++;
-		bufDescTable[frame_number].refbit = 1;
+		bufDescTable[frameNo].pinCnt++;
+		bufDescTable[frameNo].refbit = 1;
 	}
-	catch (const std::HashNotFoundException &e)
+	catch (const HashNotFoundException &e)
 	{
 		// lookup trows HashNotFoundException since the page is not found in
 		//in the buffer pool
-		allocBuf(frame_number);					//allocate a buffer frame
+		allocBuf(frameNo);					//allocate a buffer frame
 		Page page_red = file->readPage(pageNo); //read page from disk to mem
-		bufPool[frame_number] = page_red;
-		page = &bufPool[frame_number];
-		hashTable->insert(file, pageNo, frame_number); // insert the page in the hashtable
-		bufDescTable[frame_number].Set(file, pageNo);
+		bufPool[frameNo] = page_red;
+		page = &bufPool[frameNo];
+		hashTable->insert(file, pageNo, frameNo); // insert the page in the hashtable
+		bufDescTable[frameNo].Set(file, pageNo);
 	}
 }
 
@@ -144,30 +161,74 @@ void BufMgr::readPage(File *file, const PageId pageNo, Page *&page)
 * Unpin a page from memory since it is no longer required for it to remain in memory.
 *
 * @param file   	File object
-* @param PageNo  Page number
+* @param PageNo     Page number
 * @param dirty		True if the page to be unpinned needs to be marked dirty	
 * @throws  PageNotPinnedException If the page is not already pinned
 */
 void BufMgr::unPinPage(File *file, const PageId pageNo, const bool dirty)
 {
-	FrameId frame_number;
+	FrameId frameNo;
 	try
 	{ //try to find the page
-		hashTable->lookup(file, pageNo, frame_number);
-		int pin_count = bufDescTable[frame_number].pinCnt;
+		hashTable->lookup(file, pageNo, frameNo);
+		int pin_count = bufDescTable[frameNo].pinCnt;
 		//Throws PAGENOTPINNED if the pin count is already 0
 		if (pin_count == 0)
 			throw PageNotPinnedException(file->filename(), pageNo, frameNo);
 		//if dirty == true, sets the dirty bit
 		if (dirty == true)
-			bufDescTable[frame_number].dirty = dirty;
+			bufDescTable[frameNo].dirty = dirty;
 		//Decrements the pinCnt of the frame containing (file, PageNo)
-		bufDescTable[frame_number].pinCnt -= 1;
+		bufDescTable[frameNo].pinCnt -= 1;
 	}
-	catch (const std::HashNotFoundException &e)
+	catch (const HashNotFoundException &e)
 	{
 		//Does nothing if page is not found in the Hashtable lookup
 	}
+}
+
+/**
+* Allocates a new, empty page in the file and returns the Page object.
+* The newly allocated page is also assigned a frame in the buffer pool.
+*
+* @param file    File object
+* @param PageNo  Page number. The number assigned to the page in the file is returned via this reference.
+* @param page    Reference to page pointer. The newly allocated in-memory Page object is returned via this reference.
+*/
+void BufMgr::allocPage(File *file, PageId &pageNo, Page *&page)
+{
+    FrameId frameNo;
+    Page p = file->allocatePage(); //store the newly allocated page in p
+    allocBuf(frameNo);           //obtain a buffer pool frame
+    bufPool[frameNo] = p;
+    //returns both the page number of the newly allocated page
+    page = &bufPool[frameNo];
+    pageNo = page->page_number();
+    hashTable->insert(file, pageNo, frameNo); //insert entry in the Hashtable
+    bufDescTable[frameNo].Set(file, pageNo);
+}
+
+/**
+* Delete page from file and also from buffer pool if present.
+* Since the page is entirely deleted from file, its unnecessary to see if the page is dirty.
+*
+* @param file    File object
+* @param PageNo  Page number
+*/
+void BufMgr::disposePage(File *file, const PageId pageNo)
+{
+    FrameId frameNo;
+    try
+    {    //makes sure that if the page to be deleted is allocated a frame in the buffer pool, that frame
+        //is freed and correspondingly entry from hash table is also removed
+        hashTable->lookup(file, pageNo, frameNo);
+        hashTable->remove(bufDescTable[frameNo].file, bufDescTable[frameNo].pageNo);
+        bufDescTable[frameNo].Clear();
+    }
+    catch (const HashNotFoundException &e)
+    {
+    }
+    file->deletePage(pageNo); //delete the page from the file
 }
 
 /**
@@ -175,80 +236,31 @@ void BufMgr::unPinPage(File *file, const PageId pageNo, const bool dirty)
 * All the frames assigned to the file need to be unpinned from buffer pool before this function can be successfully called.
 * Otherwise Error returned.
 *
-* @param file   	File object
+* @param file   File object
 * @throws  PagePinnedException If any page of the file is pinned in the buffer pool 
 * @throws BadBufferException If any frame allocated to the file is found to be invalid
 */
 void BufMgr::flushFile(const File *file)
 {
 	 // first check if all pages of this file are unpinned
-  File* pFile = const_cast<File*>(file);
-  std::vector<BufDesc*> frames;
+      File* pFile = const_cast<File*>(file);
   for(int i = 0; i < numBufs; i++){
-    BufDesc* frame = &bufTable[i];
+    BufDesc* frame = &bufDescTable[i];
     if(frame->file == pFile){
-      frames.push_back(frame);
+      if(frame->pinCnt > 0)
+        throw PagePinnedException(frame->file->filename(), frame->pageNo, frame->frameNo);
+      if(!frame->valid)
+          throw BadBufferException(frame->frameNo, frame->dirty, frame->valid, frame->refbit);
+      if(frame->dirty){
+        // flush to disk
+        frame->file->writePage(*(bufPool + frame->frameNo));
+        frame->dirty = false;
+      }
+      hashTable->remove(file, frame->pageNo);
+      frame->Clear();
     }
-    if(frame->pinCnt > 0) 
-	throw PagePinnedException();
   }
-  for(unsigned int i = 0; i < frames.size(); i++){
-    BufDesc* pFrame = frames[i];
-    if(pFrame->dirty){
-      // flush to disk
-      Status s = pFile->writePage(pFrame->pageNo, bufPool + pFrame->frameNo);
-      CHKSTAT(s);
-      pFrame->dirty = false;
-    }
-    Status s = hashTable->remove(pFile, pFrame->pageNo);
-    CHKSTAT(s);
-    pFrame->Clear();
-  }
-  throw BadBufferException();
-}
-
-/**
-* Allocates a new, empty page in the file and returns the Page object.
-* The newly allocated page is also assigned a frame in the buffer pool.
-*
-* @param file   	File object
-* @param PageNo  Page number. The number assigned to the page in the file is returned via this reference.
-* @param page  	Reference to page pointer. The newly allocated in-memory Page object is returned via this reference.
-*/
-void BufMgr::allocPage(File *file, PageId &pageNo, Page *&page)
-{
-	FrameId frame_number;
-	Page p = file->allocatePage(); //store the newly allocated page in p
-	allocBuf(frame_number);		   //obtain a buffer pool frame
-	bufPool[frame_number] = p;
-	//returns both the page number of the newly allocated page
-	page = &bufPool[frame_number];
-	pageNo = page->page_number();
-	hashTable->insert(file, pageNo, frame_number); //insert entry in the Hashtable
-	bufDescTable[frame_number].Set(file, pageNo);
-}
-
-/**
-* Delete page from file and also from buffer pool if present.
-* Since the page is entirely deleted from file, its unnecessary to see if the page is dirty.
-*
-* @param file   	File object
-* @param PageNo  Page number
-*/
-void BufMgr::disposePage(File *file, const PageId PageNo)
-{
-	FrameId frame_number;
-	try
-	{	//makes sure that if the page to be deleted is allocated a frame in the buffer pool, that frame
-		//is freed and correspondingly entry from hash table is also removed
-		hashTable->lookup(file, pageNo, frame_number);
-		hashTable->remove(bufDescTable[frameNo].file, bufDescTable[frameNo].pageNo);
-		bufDescTable[frameNo].Clear();
-	}
-	catch (const std::HashNotFoundException &e)
-	{
-	}
-	file->deletePage(PageNo); //delete the page from the file
+  
 }
 
 /**
