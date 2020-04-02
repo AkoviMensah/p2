@@ -1,6 +1,6 @@
 /**
  * Program Title: Buffer Manager
- * File Purpose: Heart of the buffer manager, provides a interface for user
+ * File Purpose: The central class which manages the buffer pool including frame allocation and deallocation to pages in the file.
  * Authors & ID: AKOVI BERLOS MENSAH (9080623458)
  *               Yuanbo Zhang(9080344840)
  *               Quming Wang(9079581147);

@@ -1,6 +1,6 @@
 /**
  * Program Title: Buffer Manager
- * File Purpose:
+ * File Purpose: Hash table class to keep track of pages in the buffer pool.
  * Authors & ID: AKOVI BERLOS MENSAH (9080623458)
  *               Yuanbo Zhang (9080344840)
  *               Quming Wang(9079581147);

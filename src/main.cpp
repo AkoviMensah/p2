@@ -1,3 +1,12 @@
+/**
+* Program Title: Buffer Manager
+* File Purpose: Test cases for Buffer Manager
+* Authors & ID: AKOVI BERLOS MENSAH (9080623458)
+*               Yuanbo Zhang(9080344840)
+*               Quming Wang(9079581147);
+*
+*/
+
 #include <iostream>
 #include <stdlib.h>
 //#include <stdio.h>
