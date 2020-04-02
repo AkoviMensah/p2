@@ -21,6 +21,8 @@
 #include "exceptions/page_not_pinned_exception.h"
 #include "exceptions/page_pinned_exception.h"
 #include "exceptions/buffer_exceeded_exception.h"
+#include "exceptions/bad_buffer_exception.h"
+#include "exceptions/invalid_record_exception.h"
 
 #define PRINT_ERROR(str) \
 { \
@@ -67,6 +69,8 @@ void test3();
 void test4();
 void test5();
 void test6();
+void test7();
+void test8();
 void testBufMgr();
 
 int main() 
@@ -181,6 +185,8 @@ void testBufMgr()
 	fork_test(test4);
 	fork_test(test5);
 	fork_test(test6);
+    fork_test(test7);
+    fork_test(test8);
 
 	//Close files before deleting them
 	file1.close();
@@ -201,6 +207,9 @@ void testBufMgr()
 	std::cout << "\n" << "Passed all tests." << "\n";
 }
 
+/**
+* Test the functionality of readPage, should read back the record
+*/
 void test1()
 {
 	//Allocating pages in a file...
@@ -226,6 +235,9 @@ void test1()
 	std::cout<< "Test 1 passed" << "\n";
 }
 
+/**
+* Test the functionality of readPage, should read back the record for multiple files
+*/
 void test2()
 {
 	//Writing and reading back multiple files
@@ -268,6 +280,9 @@ void test2()
 	std::cout << "Test 2 passed" << "\n";
 }
 
+/**
+* Test the functionality of readPage, should throw InvalidPageException if the file does not exist
+*/
 void test3()
 {
 	try
@@ -282,6 +297,9 @@ void test3()
 	std::cout << "Test 3 passed" << "\n";
 }
 
+/**
+* Test the functionality of unPinPage, should throw PageNotPinnedException if the page is not already pinned
+*/
 void test4()
 {
 	bufMgr->allocPage(file4ptr, i, page);
@@ -298,6 +316,9 @@ void test4()
 	std::cout << "Test 4 passed" << "\n";
 }
 
+/**
+* Test the functionality of allocBuf, should throw BufferExceededException if all buffer frames are pinned
+*/
 void test5()
 {
 	for (i = 0; i < num; i++) {
@@ -322,6 +343,9 @@ void test5()
 		bufMgr->unPinPage(file5ptr, i, true);
 }
 
+/**
+* Test the functionality of flushFile, should throw PagePinnedException if any page of the file being flushed is pinned
+*/
 void test6()
 {
 	//flushing file with pages still pinned. Should generate an error
@@ -345,3 +369,100 @@ void test6()
 
 	bufMgr->flushFile(file1ptr);
 }
+
+/**
+* Test the functionality of flushFile, we should not find any record in buffer after flush
+*/
+void test7()
+{
+    //Writing and reading back multiple files
+    //The page number and the value should not match
+
+    for (i = 0; i < num/3; i++)
+    {
+        bufMgr->allocPage(file2ptr, pageno2, page2);
+        sprintf((char*)tmpbuf, "test.2 Page %d %7.1f", pageno2, (float)pageno2);
+        rid2 = page2->insertRecord(tmpbuf);
+
+        bufMgr->allocPage(file3ptr, pageno3, page3);
+        sprintf((char*)tmpbuf, "test.3 Page %d %7.1f", pageno3, (float)pageno3);
+        rid3 = page3->insertRecord(tmpbuf);
+        
+        
+        bufMgr->unPinPage(file2ptr, pageno2, false);
+        bufMgr->unPinPage(file3ptr, pageno3, false);
+        bufMgr->flushFile(file2ptr);
+        bufMgr->flushFile(file3ptr);
+        
+        try
+        {
+            bufMgr->readPage(file2ptr, pageno2, page2);
+            sprintf((char*)&tmpbuf, "test.2 Page %d %7.1f", pageno2, (float)pageno2);
+            if(strncmp(page2->getRecord(rid2).c_str(), tmpbuf, strlen(tmpbuf)) == 0)
+            {
+                PRINT_ERROR("ERROR :: RECORD STILL EXIST");
+            }
+
+            bufMgr->readPage(file3ptr, pageno3, page3);
+            sprintf((char*)&tmpbuf, "test.3 Page %d %7.1f", pageno3, (float)pageno3);
+            if(strncmp(page3->getRecord(rid3).c_str(), tmpbuf, strlen(tmpbuf)) == 0)
+            {
+                PRINT_ERROR("ERROR :: RECORD STILL EXIST");
+            }
+        }
+        catch(InvalidRecordException &e)
+        {
+            bufMgr->unPinPage(file2ptr, pageno2, false);
+            bufMgr->unPinPage(file3ptr, pageno3, false);
+        }
+
+        bufMgr->unPinPage(file1ptr, pageno1, false);
+    }
+
+    
+
+    std::cout << "Test 7 passed" << "\n";
+}
+
+void test8()
+{
+    // Writing some pages to files then deleting them,
+    // and try reading back multiple files
+    // we should not find those pages
+
+    for (i = 0; i < num/3; i++)
+    {
+        bufMgr->allocPage(file2ptr, pageno2, page2);
+        sprintf((char*)tmpbuf, "test.2 Page %d %7.1f", pageno2, (float)pageno2);
+        rid2 = page2->insertRecord(tmpbuf);
+
+        bufMgr->allocPage(file3ptr, pageno3, page3);
+        sprintf((char*)tmpbuf, "test.3 Page %d %7.1f", pageno3, (float)pageno3);
+        rid3 = page3->insertRecord(tmpbuf);
+        
+        
+        bufMgr->unPinPage(file2ptr, pageno2, false);
+        bufMgr->unPinPage(file3ptr, pageno3, false);
+        bufMgr->disposePage(file2ptr, pageno2);
+        bufMgr->disposePage(file3ptr, pageno3);
+        
+        try
+        {
+            bufMgr->readPage(file2ptr, pageno2, page2);
+            bufMgr->readPage(file3ptr, pageno3, page3);
+            PRINT_ERROR("ERROR :: PAGE STILL EXIST");
+        }
+        catch(InvalidPageException &e)
+        {
+            bufMgr->unPinPage(file2ptr, pageno2, false);
+            bufMgr->unPinPage(file3ptr, pageno3, false);
+        }
+
+        bufMgr->unPinPage(file1ptr, pageno1, false);
+    }
+
+    
+
+    std::cout << "Test 8 passed" << "\n";
+}
+
