@@ -375,8 +375,9 @@ void test6()
 */
 void test7()
 {
-    //Writing and reading back multiple files
-    //The page number and the value should not match
+    // Writing some files to buffer, flushing the file,
+    // and try reading back the record
+    // Should throw InvalidRecordException
 
     for (i = 0; i < num/3; i++)
     {
@@ -424,6 +425,9 @@ void test7()
     std::cout << "Test 7 passed" << "\n";
 }
 
+/**
+* Test the functionality of disposePage, we should not find those pages after disposing them
+*/
 void test8()
 {
     // Writing some pages to files then deleting them,
